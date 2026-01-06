@@ -1,4 +1,6 @@
 'use client';
+// Build trigger: Version 2.0 - Final Refinements 
+
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
@@ -309,264 +311,270 @@ export default function DashboardFinanzas() {
           <StatCard title="Balance Neto" value={stats.balance} icon={<DollarSign />} color="indigo" theme={T} format={format} isNeg={stats.balance < 0} />
         </div>
 
-    </div>
 
-        {/* New Features: Category Distribution (Mobile Friendly) */ }
-  {
-    stats.pieData.length > 0 && (
-      <div className={`${T.card} p-6 md:p-8 rounded-[32px] border ${T.border} ${T.cardShadow}`}>
-        <div className="flex items-center gap-3 mb-6">
-          <div className={`p-2.5 ${theme === 'light' ? 'bg-indigo-50 text-indigo-500' : 'bg-indigo-900/30 text-indigo-400'} rounded-xl`}><PieChartIcon size={20} /></div>
-          <h2 className={`font-black ${T.text} tracking-tight`}>Distribución de Gastos</h2>
-        </div>
-        <div className="h-[200px] md:h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={stats.pieData}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={80}
-                paddingAngle={5}
-                dataKey="value"
-              >
+        {/* New Features: Category Distribution (Mobile Friendly) */}
+
+        {
+          stats.pieData.length > 0 && (
+            <div className={`${T.card} p-6 md:p-8 rounded-[32px] border ${T.border} ${T.cardShadow}`}>
+              <div className="flex items-center gap-3 mb-6">
+                <div className={`p-2.5 ${theme === 'light' ? 'bg-indigo-50 text-indigo-500' : 'bg-indigo-900/30 text-indigo-400'} rounded-xl`}><PieChartIcon size={20} /></div>
+                <h2 className={`font-black ${T.text} tracking-tight`}>Distribución de Gastos</h2>
+              </div>
+              <div className="h-[200px] md:h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={stats.pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {stats.pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      // @ts-ignore
+                      formatter={(val: any) => format(val)}
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mt-4">
                 {stats.pieData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  <div key={entry.name} className="flex items-center gap-2 px-3 py-2 bg-slate-100/50 dark:bg-slate-900/50 rounded-xl">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                    <span className={`text-[9px] font-bold ${T.text} truncate`}>{entry.name}</span>
+                  </div>
                 ))}
-              </Pie>
-              <Tooltip
-                // @ts-ignore
-                formatter={(val: any) => format(val)}
-                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mt-4">
-          {stats.pieData.map((entry, index) => (
-            <div key={entry.name} className="flex items-center gap-2 px-3 py-2 bg-slate-100/50 dark:bg-slate-900/50 rounded-xl">
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-              <span className={`text-[9px] font-bold ${T.text} truncate`}>{entry.name}</span>
+              </div>
             </div>
-          ))}
-        </div>
-      </div>
-    )
-  }
+          )
+        }
 
-  {/* Movements - Mobile Optimized Tabs or Scroll */ }
-  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
-    <Column title="Ingresos" data={incomes} color="emerald" icon={<ArrowUpCircle />} theme={T} format={format} isPrivacy={isPrivacy} onDel={(id: string) => setMovements(p => p.filter(x => x.id !== id))} total={stats.income} />
-    <Column title="Gastos" data={outcomes} color="rose" icon={<ArrowDownCircle />} theme={T} format={format} isPrivacy={isPrivacy} onDel={(id: string) => setMovements(p => p.filter(x => x.id !== id))} total={stats.expenses} />
-  </div>
-
-  {/* Bottom Stats Row */ }
-  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-    <div className={`${T.card} p-6 md:p-8 rounded-[32px] border ${T.border} ${T.cardShadow}`}>
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-3">
-          <div className={`p-2.5 md:p-3 ${theme === 'light' ? 'bg-amber-50 text-amber-500' : 'bg-amber-900/30 text-amber-500'} rounded-xl md:rounded-2xl`}><Bug size={20} /></div>
-          <div className={`font-black ${T.text} tracking-tight`}>Fugas Hormiga</div>
+        {/* Movements - Mobile Optimized Tabs or Scroll */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+          <Column title="Ingresos" data={incomes} color="emerald" icon={<ArrowUpCircle />} theme={T} format={format} isPrivacy={isPrivacy} onDel={(id: string) => setMovements(p => p.filter(x => x.id !== id))} total={stats.income} />
+          <Column title="Gastos" data={outcomes} color="rose" icon={<ArrowDownCircle />} theme={T} format={format} isPrivacy={isPrivacy} onDel={(id: string) => setMovements(p => p.filter(x => x.id !== id))} total={stats.expenses} />
         </div>
-        <button onClick={() => setShowAntForm(true)} className={`p-2 ${T.inputBg} ${T.subText} hover:text-amber-500 rounded-xl transition-all`}><Plus size={16} /></button>
-      </div>
-      <div className="space-y-2 overflow-y-auto max-h-[150px] scrollbar-hide">
-        {antExpenses.map(a => (
-          <div key={a.id} className={`flex justify-between items-center p-3 ${T.inputBg} rounded-xl group`}>
-            <span className={`text-[11px] font-bold ${T.text}`}>{a.name}</span>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-black text-rose-500">{format(a.monthlyAmount * 12)}</span>
-              <button onClick={() => setAntExpenses(p => p.filter(x => x.id !== a.id))} className="md:opacity-0 group-hover:opacity-100 text-rose-400 hover:text-rose-600 transition-all"><Trash2 size={12} /></button>
+
+        {/* Bottom Stats Row */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className={`${T.card} p-6 md:p-8 rounded-[32px] border ${T.border} ${T.cardShadow}`}>
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-3">
+                <div className={`p-2.5 md:p-3 ${theme === 'light' ? 'bg-amber-50 text-amber-500' : 'bg-amber-900/30 text-amber-500'} rounded-xl md:rounded-2xl`}><Bug size={20} /></div>
+                <div className={`font-black ${T.text} tracking-tight`}>Fugas Hormiga</div>
+              </div>
+              <button onClick={() => setShowAntForm(true)} className={`p-2 ${T.inputBg} ${T.subText} hover:text-amber-500 rounded-xl transition-all`}><Plus size={16} /></button>
+            </div>
+            <div className="space-y-2 overflow-y-auto max-h-[150px] scrollbar-hide">
+              {antExpenses.map(a => (
+                <div key={a.id} className={`flex justify-between items-center p-3 ${T.inputBg} rounded-xl group`}>
+                  <span className={`text-[11px] font-bold ${T.text}`}>{a.name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-black text-rose-500">{format(a.monthlyAmount * 12)}</span>
+                    <button onClick={() => setAntExpenses(p => p.filter(x => x.id !== a.id))} className="md:opacity-0 group-hover:opacity-100 text-rose-400 hover:text-rose-600 transition-all"><Trash2 size={12} /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 flex justify-between items-center">
+              <span className={`text-[8px] font-black ${T.subText} uppercase tracking-widest`}>Impacto Anual</span>
+              <span className={`text-lg font-black text-rose-500`}>{format(stats.totalAnt)}</span>
             </div>
           </div>
-        ))}
-      </div>
-      <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 flex justify-between items-center">
-        <span className={`text-[8px] font-black ${T.subText} uppercase tracking-widest`}>Impacto Anual</span>
-        <span className={`text-lg font-black text-rose-500`}>{format(stats.totalAnt)}</span>
-      </div>
-    </div>
 
-    <div className={`${T.card} p-6 md:p-8 rounded-[32px] border ${T.border} ${T.cardShadow} flex flex-col justify-between relative overflow-hidden group`}>
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-3">
-          <div className={`p-2.5 md:p-3.5 ${theme === 'light' ? 'bg-emerald-50 text-emerald-600 shadow-sm' : 'bg-emerald-500/20 text-emerald-400'} rounded-xl md:rounded-[20px]`}>
-            <Target size={20} strokeWidth={2.5} />
+          <div className={`${T.card} p-6 md:p-8 rounded-[32px] border ${T.border} ${T.cardShadow} flex flex-col justify-between relative overflow-hidden group`}>
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-3">
+                <div className={`p-2.5 md:p-3.5 ${theme === 'light' ? 'bg-emerald-50 text-emerald-600 shadow-sm' : 'bg-emerald-500/20 text-emerald-400'} rounded-xl md:rounded-[20px]`}>
+                  <Target size={20} strokeWidth={2.5} />
+                </div>
+                <h3 className={`font-black ${T.text} tracking-tight text-sm md:text-base`}>{goal.name}</h3>
+              </div>
+              <button
+                onClick={() => { setTempGoalName(goal.name); setTempGoalAmount(goal.amount.toString()); setShowGoalForm(true); }}
+                className={`p-2 rounded-xl transition-all ${theme === 'light' ? 'hover:bg-slate-100 text-slate-400' : 'hover:bg-slate-700 text-slate-500'}`}
+              >
+                <Pencil size={14} />
+              </button>
+            </div>
+
+            <div className="space-y-4 relative z-10">
+              <div className="flex justify-between items-end">
+                <p className={`text-3xl md:text-4xl font-black ${T.text} tracking-tighter tabular-nums`}>{stats.progress.toFixed(1)}%</p>
+                <div className="text-right">
+                  <p className={`text-[10px] font-black ${T.subText} uppercase tracking-widest`}>Meta Final</p>
+                  <p className={`text-sm font-black text-indigo-500`}>{format(goal.amount)}</p>
+                </div>
+              </div>
+
+              <div className={`h-4 w-full ${theme === 'light' ? 'bg-slate-100 shadow-inner' : 'bg-slate-900/50'} rounded-full p-1`}>
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-emerald-500 to-indigo-600 shadow-lg shadow-emerald-500/20 transition-all duration-1000 ease-out"
+                  style={{ width: `${stats.progress}%` }}
+                ></div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <div className={`p-3 rounded-2xl ${T.inputBg} border ${T.border}`}>
+                  <p className={`text-[8px] font-black ${T.subText} uppercase tracking-widest mb-1`}>Aporte Mensual</p>
+                  <div className="flex items-center gap-1">
+                    <span className={`text-xs font-black ${T.text}`}>$</span>
+                    <input
+                      type="number"
+                      value={goal.monthlyContribution}
+                      onChange={(e) => setGoal(p => ({ ...p, monthlyContribution: parseFloat(e.target.value) || 0 }))}
+                      className={`w-full bg-transparent border-none outline-none font-black text-sm ${T.text}`}
+                    />
+                  </div>
+                </div>
+                <div className={`p-3 rounded-2xl ${theme === 'light' ? 'bg-indigo-50 border-indigo-100' : 'bg-indigo-900/20 border-indigo-800'}`}>
+                  <p className={`text-[8px] font-black ${theme === 'light' ? 'text-indigo-400' : 'text-indigo-300'} uppercase tracking-widest mb-1`}>Tiempo Restante</p>
+                  <p className={`text-sm font-black ${theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}`}>
+                    {stats.monthsToGoal === Infinity ? '∞' : (stats.monthsToGoal >= 12 ? `${(stats.monthsToGoal / 12).toFixed(1)} años` : `${stats.monthsToGoal} meses`)}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <TrendingUp className={`absolute -right-4 -bottom-4 ${theme === 'light' ? 'text-indigo-500/5' : 'text-indigo-500/10'}`} size={120} />
           </div>
-          <h3 className={`font-black ${T.text} tracking-tight text-sm md:text-base`}>{goal.name}</h3>
+
+          <div className={`bg-gradient-to-br ${theme === 'light' ? 'from-indigo-600 to-indigo-800' : 'from-indigo-800 to-black'} p-6 md:p-8 rounded-[32px] text-white flex flex-col min-h-[240px] md:min-h-0 relative overflow-hidden group`}>
+            <div className="relative z-10 flex flex-col h-full">
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-white/20 rounded-xl"><Calendar size={20} /></div>
+                  <div className="font-black tracking-tight">Pagos Próximos</div>
+                </div>
+                <button onClick={() => setShowPaymentForm(true)} className="p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all"><Plus size={16} /></button>
+              </div>
+              <div className="flex-1 overflow-y-auto space-y-3 scrollbar-hide max-h-[140px]">
+                {sortedPayments.length > 0 ? sortedPayments.map(p => {
+                  const days = getDaysUntil(p.dueDate);
+                  const isUrgent = days <= 3;
+                  return (
+                    <div key={p.id} className="flex justify-between items-center bg-white/5 p-3 rounded-xl group/pay">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-black text-xs tracking-tight truncate pr-2">{p.name}</p>
+                        <p className={`text-[8px] ${isUrgent ? 'text-rose-400 font-black' : 'text-indigo-200'} uppercase tracking-widest`}>
+                          {days === 0 ? 'Hoy' : days < 0 ? `Venció: ${Math.abs(days)}d` : `En ${days}d`}
+                        </p>
+                      </div>
+                      <div className="text-right flex items-center gap-2">
+                        <span className={`font-black text-xs ${isUrgent ? 'text-rose-400' : ''}`}>{isPrivacy ? '••••' : format(p.amount)}</span>
+                        <button onClick={() => setPayments(prev => prev.filter(x => x.id !== p.id))} className="md:opacity-0 group-hover/pay:opacity-100 text-white/50 hover:text-white"><Trash2 size={12} /></button>
+                      </div>
+                    </div>
+                  );
+                }) : <p className="text-[10px] text-indigo-300 font-bold text-center mt-4">Sin pendientes ⚡</p>}
+              </div>
+            </div>
+            <Zap className="text-white/5 absolute -right-4 -bottom-4 pointer-events-none" size={80} fill="currentColor" />
+          </div>
         </div>
+
+        {/* Footer Actions */}
+        <footer className="mt-12 pt-8 border-t border-slate-200/5 text-center space-y-6">
+          <div className="flex justify-center gap-4">
+            <button onClick={handleExport} className={`flex items-center gap-2 px-6 py-3 rounded-xl border ${T.border} ${T.card} ${T.subText} font-black text-[10px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all`}>
+              <Download size={14} /> Exportar JSON
+            </button>
+            <button onClick={handleReset} className={`flex items-center gap-2 px-6 py-3 rounded-xl border border-rose-500/20 bg-rose-500/5 text-rose-500 font-black text-[10px] uppercase tracking-widest hover:bg-rose-500 hover:text-white active:scale-95 transition-all`}>
+              <Trash2 size={14} /> Limpiar Todo
+            </button>
+          </div>
+          <p className={`text-[9px] leading-relaxed ${T.subText} font-medium opacity-60 px-6 max-w-2xl mx-auto italic`}>
+            Control local: Tus datos se guardan estrictamente en este dispositivo.
+          </p>
+        </footer>
+      </main>
+
+
+      {/* Floating Action Button */}
+      <div className="fixed bottom-6 right-6 md:hidden z-50">
         <button
-          onClick={() => { setTempGoalName(goal.name); setTempGoalAmount(goal.amount.toString()); setShowGoalForm(true); }}
-          className={`p-2 rounded-xl transition-all ${theme === 'light' ? 'hover:bg-slate-100 text-slate-400' : 'hover:bg-slate-700 text-slate-500'}`}
+          onClick={() => setShowForm(true)}
+          className="w-16 h-16 bg-emerald-500 text-white rounded-full shadow-2xl flex items-center justify-center active:scale-90 active:rotate-90 transition-all ring-4 ring-white/10"
         >
-          <Pencil size={14} />
+          <Plus size={32} strokeWidth={3} />
         </button>
       </div>
 
-      <div className="space-y-4 relative z-10">
-        <div className="flex justify-between items-end">
-          <p className={`text-3xl md:text-4xl font-black ${T.text} tracking-tighter tabular-nums`}>{stats.progress.toFixed(1)}%</p>
-          <div className="text-right">
-            <p className={`text-[10px] font-black ${T.subText} uppercase tracking-widest`}>Meta Final</p>
-            <p className={`text-sm font-black text-indigo-500`}>{format(goal.amount)}</p>
-          </div>
-        </div>
 
-        <div className={`h-4 w-full ${theme === 'light' ? 'bg-slate-100 shadow-inner' : 'bg-slate-900/50'} rounded-full p-1`}>
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-emerald-500 to-indigo-600 shadow-lg shadow-emerald-500/20 transition-all duration-1000 ease-out"
-            style={{ width: `${stats.progress}%` }}
-          ></div>
-        </div>
 
-        <div className="grid grid-cols-2 gap-4 pt-2">
-          <div className={`p-3 rounded-2xl ${T.inputBg} border ${T.border}`}>
-            <p className={`text-[8px] font-black ${T.subText} uppercase tracking-widest mb-1`}>Aporte Mensual</p>
-            <div className="flex items-center gap-1">
-              <span className={`text-xs font-black ${T.text}`}>$</span>
-              <input
-                type="number"
-                value={goal.monthlyContribution}
-                onChange={(e) => setGoal(p => ({ ...p, monthlyContribution: parseFloat(e.target.value) || 0 }))}
-                className={`w-full bg-transparent border-none outline-none font-black text-sm ${T.text}`}
-              />
+
+
+      {/* --- Modals - Adjusted for Mobile View --- */}
+      {
+        showForm && <Modal title="Registro Rápido" onClose={() => setShowForm(false)} theme={T}>
+          <form onSubmit={handleAdd} className="space-y-4">
+            <Input val={newConcept} set={setNewConcept} ph="Concepto (ej. Almuerzo)" theme={T} />
+            <div className="grid grid-cols-2 gap-3">
+              <select value={newCategory} onChange={e => setNewCategory(e.target.value)} className={`w-full p-4 md:p-6 ${T.inputBg} ${T.text} rounded-2xl font-bold border-none outline-none shadow-inner`}>
+                <option>Ingreso</option><option>Gasto</option>
+              </select>
+              <Input val={newAmount} set={setNewAmount} ph="0.00" type="number" theme={T} />
             </div>
-          </div>
-          <div className={`p-3 rounded-2xl ${theme === 'light' ? 'bg-indigo-50 border-indigo-100' : 'bg-indigo-900/20 border-indigo-800'}`}>
-            <p className={`text-[8px] font-black ${theme === 'light' ? 'text-indigo-400' : 'text-indigo-300'} uppercase tracking-widest mb-1`}>Tiempo Restante</p>
-            <p className={`text-sm font-black ${theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}`}>
-              {stats.monthsToGoal === Infinity ? '∞' : (stats.monthsToGoal >= 12 ? `${(stats.monthsToGoal / 12).toFixed(1)} años` : `${stats.monthsToGoal} meses`)}
-            </p>
-          </div>
-        </div>
-      </div>
-      <TrendingUp className={`absolute -right-4 -bottom-4 ${theme === 'light' ? 'text-indigo-500/5' : 'text-indigo-500/10'}`} size={120} />
+            <Btn type="submit" label="Confirmar" color="emerald" />
+          </form>
+        </Modal>
+      }
+
+      {
+        showAntForm && <Modal title="Fuga Hormiga 🐜" onClose={() => setShowAntForm(false)} theme={T}>
+          <form onSubmit={e => {
+            e.preventDefault();
+            setAntExpenses(p => [...p, { id: Date.now().toString(), name: antName, monthlyAmount: parseFloat(antMonthly) }]);
+            setAntName('');
+            setAntMonthly('');
+            setShowAntForm(false);
+          }} className="space-y-4">
+            <Input val={antName} set={setAntName} ph="Nombre (ej. Netflix)" theme={T} />
+            <Input val={antMonthly} set={setAntMonthly} ph="Mensual ($)" type="number" theme={T} />
+            <Btn type="submit" label="Registrar Impacto" color="amber" />
+          </form>
+        </Modal>
+      }
+
+      {
+        showGoalForm && <Modal title="Ajustar Meta" onClose={() => setShowGoalForm(false)} theme={T}>
+          <form onSubmit={e => { e.preventDefault(); setGoal({ ...goal, name: tempGoalName, amount: parseFloat(tempGoalAmount) }); setShowGoalForm(false); }} className="space-y-4">
+            <Input val={tempGoalName} set={setTempGoalName} ph="Nombre de meta" theme={T} />
+            <Input val={tempGoalAmount} set={setTempGoalAmount} ph="Monto $" type="number" theme={T} />
+            <Btn type="submit" label="Actualizar Meta" color="indigo" />
+          </form>
+        </Modal>
+      }
+
+      {
+        showPaymentForm && <Modal title="Agendar Pago" onClose={() => setShowPaymentForm(false)} theme={T}>
+          <form onSubmit={e => {
+            e.preventDefault();
+            setPayments(p => [...p, { id: Date.now().toString(), name: payName, amount: parseFloat(payAmount), dueDate: payDate }]);
+            setPayName('');
+            setPayAmount('');
+            setPayDate('');
+            setShowPaymentForm(false);
+          }} className="space-y-4">
+            <Input val={payName} set={setPayName} ph="Concepto del pago" theme={T} />
+            <div className="grid grid-cols-2 gap-3">
+              <Input val={payAmount} set={setPayAmount} ph="Monto $" type="number" theme={T} />
+              <input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} className={`w-full p-4 md:p-6 ${T.inputBg} ${T.text} font-bold rounded-2xl border-none outline-none shadow-inner`} />
+            </div>
+            <Btn type="submit" label="Guardar Recordatorio" color="rose" />
+          </form>
+        </Modal>
+      }
+
     </div>
 
-    <div className={`bg-gradient-to-br ${theme === 'light' ? 'from-indigo-600 to-indigo-800' : 'from-indigo-800 to-black'} p-6 md:p-8 rounded-[32px] text-white flex flex-col min-h-[240px] md:min-h-0 relative overflow-hidden group`}>
-      <div className="relative z-10 flex flex-col h-full">
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-white/20 rounded-xl"><Calendar size={20} /></div>
-            <div className="font-black tracking-tight">Pagos Próximos</div>
-          </div>
-          <button onClick={() => setShowPaymentForm(true)} className="p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all"><Plus size={16} /></button>
-        </div>
-        <div className="flex-1 overflow-y-auto space-y-3 scrollbar-hide max-h-[140px]">
-          {sortedPayments.length > 0 ? sortedPayments.map(p => {
-            const days = getDaysUntil(p.dueDate);
-            const isUrgent = days <= 3;
-            return (
-              <div key={p.id} className="flex justify-between items-center bg-white/5 p-3 rounded-xl group/pay">
-                <div className="min-w-0 flex-1">
-                  <p className="font-black text-xs tracking-tight truncate pr-2">{p.name}</p>
-                  <p className={`text-[8px] ${isUrgent ? 'text-rose-400 font-black' : 'text-indigo-200'} uppercase tracking-widest`}>
-                    {days === 0 ? 'Hoy' : days < 0 ? `Venció: ${Math.abs(days)}d` : `En ${days}d`}
-                  </p>
-                </div>
-                <div className="text-right flex items-center gap-2">
-                  <span className={`font-black text-xs ${isUrgent ? 'text-rose-400' : ''}`}>{isPrivacy ? '••••' : format(p.amount)}</span>
-                  <button onClick={() => setPayments(prev => prev.filter(x => x.id !== p.id))} className="md:opacity-0 group-hover/pay:opacity-100 text-white/50 hover:text-white"><Trash2 size={12} /></button>
-                </div>
-              </div>
-            );
-          }) : <p className="text-[10px] text-indigo-300 font-bold text-center mt-4">Sin pendientes ⚡</p>}
-        </div>
-      </div>
-      <Zap className="text-white/5 absolute -right-4 -bottom-4 pointer-events-none" size={80} fill="currentColor" />
-    </div>
-  </div>
-
-  {/* Footer Actions */ }
-  <footer className="mt-12 pt-8 border-t border-slate-200/5 text-center space-y-6">
-    <div className="flex justify-center gap-4">
-      <button onClick={handleExport} className={`flex items-center gap-2 px-6 py-3 rounded-xl border ${T.border} ${T.card} ${T.subText} font-black text-[10px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all`}>
-        <Download size={14} /> Exportar JSON
-      </button>
-      <button onClick={handleReset} className={`flex items-center gap-2 px-6 py-3 rounded-xl border border-rose-500/20 bg-rose-500/5 text-rose-500 font-black text-[10px] uppercase tracking-widest hover:bg-rose-500 hover:text-white active:scale-95 transition-all`}>
-        <Trash2 size={14} /> Limpiar Todo
-      </button>
-    </div>
-    <p className={`text-[9px] leading-relaxed ${T.subText} font-medium opacity-60 px-6 max-w-2xl mx-auto italic`}>
-      Control local: Tus datos se guardan estrictamente en este dispositivo.
-    </p>
-  </footer>
-      </main >
-
-    {/* Floating Action Button */ }
-    < div className = "fixed bottom-6 right-6 md:hidden z-50" >
-      <button
-        onClick={() => setShowForm(true)}
-        className="w-16 h-16 bg-emerald-500 text-white rounded-full shadow-2xl flex items-center justify-center active:scale-90 active:rotate-90 transition-all ring-4 ring-white/10"
-      >
-        <Plus size={32} strokeWidth={3} />
-      </button>
-      </div >
-
-    {/* --- Modals - Adjusted for Mobile View --- */ }
-  {
-    showForm && <Modal title="Registro Rápido" onClose={() => setShowForm(false)} theme={T}>
-      <form onSubmit={handleAdd} className="space-y-4">
-        <Input val={newConcept} set={setNewConcept} ph="Concepto (ej. Almuerzo)" theme={T} />
-        <div className="grid grid-cols-2 gap-3">
-          <select value={newCategory} onChange={e => setNewCategory(e.target.value)} className={`w-full p-4 md:p-6 ${T.inputBg} ${T.text} rounded-2xl font-bold border-none outline-none shadow-inner`}>
-            <option>Ingreso</option><option>Gasto</option>
-          </select>
-          <Input val={newAmount} set={setNewAmount} ph="0.00" type="number" theme={T} />
-        </div>
-        <Btn type="submit" label="Confirmar" color="emerald" />
-      </form>
-    </Modal>
-  }
-
-  {
-    showAntForm && <Modal title="Fuga Hormiga 🐜" onClose={() => setShowAntForm(false)} theme={T}>
-      <form onSubmit={e => {
-        e.preventDefault();
-        setAntExpenses(p => [...p, { id: Date.now().toString(), name: antName, monthlyAmount: parseFloat(antMonthly) }]);
-        setAntName('');
-        setAntMonthly('');
-        setShowAntForm(false);
-      }} className="space-y-4">
-        <Input val={antName} set={setAntName} ph="Nombre (ej. Netflix)" theme={T} />
-        <Input val={antMonthly} set={setAntMonthly} ph="Mensual ($)" type="number" theme={T} />
-        <Btn type="submit" label="Registrar Impacto" color="amber" />
-      </form>
-    </Modal>
-  }
-
-  {
-    showGoalForm && <Modal title="Ajustar Meta" onClose={() => setShowGoalForm(false)} theme={T}>
-      <form onSubmit={e => { e.preventDefault(); setGoal({ ...goal, name: tempGoalName, amount: parseFloat(tempGoalAmount) }); setShowGoalForm(false); }} className="space-y-4">
-        <Input val={tempGoalName} set={setTempGoalName} ph="Nombre de meta" theme={T} />
-        <Input val={tempGoalAmount} set={setTempGoalAmount} ph="Monto $" type="number" theme={T} />
-        <Btn type="submit" label="Actualizar Meta" color="indigo" />
-      </form>
-    </Modal>
-  }
-
-  {
-    showPaymentForm && <Modal title="Agendar Pago" onClose={() => setShowPaymentForm(false)} theme={T}>
-      <form onSubmit={e => {
-        e.preventDefault();
-        setPayments(p => [...p, { id: Date.now().toString(), name: payName, amount: parseFloat(payAmount), dueDate: payDate }]);
-        setPayName('');
-        setPayAmount('');
-        setPayDate('');
-        setShowPaymentForm(false);
-      }} className="space-y-4">
-        <Input val={payName} set={setPayName} ph="Concepto del pago" theme={T} />
-        <div className="grid grid-cols-2 gap-3">
-          <Input val={payAmount} set={setPayAmount} ph="Monto $" type="number" theme={T} />
-          <input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} className={`w-full p-4 md:p-6 ${T.inputBg} ${T.text} font-bold rounded-2xl border-none outline-none shadow-inner`} />
-        </div>
-        <Btn type="submit" label="Guardar Recordatorio" color="rose" />
-      </form>
-    </Modal>
-  }
-
-    </div >
   );
 }
 
