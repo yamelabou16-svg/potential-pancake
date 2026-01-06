@@ -445,7 +445,7 @@ export default function DashboardFinanzas() {
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(val: number) => format(val)}
+                    formatter={(val: any) => format(val)}
                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }}
                   />
                 </PieChart>
