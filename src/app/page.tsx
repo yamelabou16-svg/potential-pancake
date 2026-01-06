@@ -208,9 +208,10 @@ export default function DashboardFinanzas() {
   const incomes = useMemo(() => movements.filter(m => m.amount > 0), [movements]);
   const outcomes = useMemo(() => movements.filter(m => m.amount < 0), [movements]);
 
-  const format = useCallback((v: number) => {
+  const format = useCallback((v: any) => {
     if (isPrivacy) return '••••';
-    return `$${Math.round(v).toLocaleString()}`;
+    const val = typeof v === 'number' ? v : parseFloat(v) || 0;
+    return `$${Math.round(val).toLocaleString()}`;
   }, [isPrivacy]);
 
   const getDaysUntil = (dateStr: string) => {
@@ -401,6 +402,7 @@ export default function DashboardFinanzas() {
                     />
                     <Tooltip
                       cursor={{ fill: theme === 'light' ? '#F1F5F9' : '#1E293B' }}
+                      formatter={(val: any) => format(val)}
                       contentStyle={{
                         backgroundColor: theme === 'light' ? '#FFFFFF' : '#0F172A',
                         borderRadius: '16px',
@@ -445,6 +447,7 @@ export default function DashboardFinanzas() {
                     ))}
                   </Pie>
                   <Tooltip
+                    // @ts-ignore
                     formatter={(val: any) => format(val)}
                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }}
                   />
