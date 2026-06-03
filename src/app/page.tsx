@@ -231,13 +231,34 @@ export default function DashboardFinanzas() {
   const [showInvForm, setShowInvForm] = useState(false);
   const [showDebtForm, setShowDebtForm] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+
   const [showAntForm, setShowAntForm] = useState(false);
 
+  const [showStatementModal, setShowStatementModal] = useState(false);
+  const [statementText, setStatementText] = useState('');
+  const [statementParsedList, setStatementParsedList] = useState<{
+    id: string;
+    concept: string;
+    category: 'Ingreso' | 'Gasto Fijo' | 'Gasto Variable';
+    amount: number;
+    date: string;
+    selected: boolean;
+  }[]>([]);
+  const [isParsingStatement, setIsParsingStatement] = useState(false);
+
   // --- Form Input States ---
+
   const [newConcept, setNewConcept] = useState('');
   const [newCategory, setNewCategory] = useState<'Ingreso' | 'Gasto Fijo' | 'Gasto Variable'>('Gasto Fijo');
   const [newAmount, setNewAmount] = useState('');
   const [newDate, setNewDate] = useState('');
+
+  const [editingMovement, setEditingMovement] = useState<Movement | null>(null);
+  const [editConcept, setEditConcept] = useState('');
+  const [editCategory, setEditCategory] = useState<'Ingreso' | 'Gasto Fijo' | 'Gasto Variable'>('Gasto Fijo');
+  const [editAmount, setEditAmount] = useState('');
+  const [editDate, setEditDate] = useState('');
+
 
   const [tempGoalName, setTempGoalName] = useState('');
   const [tempGoalAmount, setTempGoalAmount] = useState('');
@@ -312,6 +333,26 @@ export default function DashboardFinanzas() {
 
     setIsLoaded(true);
   }, []);
+
+  // --- Load PDF.js dynamically ---
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!document.getElementById('pdf-js-script')) {
+      const script = document.createElement('script');
+      script.id = 'pdf-js-script';
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js';
+      script.async = true;
+      script.onload = () => {
+        // @ts-ignore
+        const pdfjsLib = window['pdfjs-dist/build/pdf'];
+        if (pdfjsLib) {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+        }
+      };
+      document.body.appendChild(script);
+    }
+  }, []);
+
 
   // --- Save Changes to Persistence ---
   useEffect(() => {
@@ -581,6 +622,143 @@ export default function DashboardFinanzas() {
     reader.readAsText(file);
   };
 
+  const parseStatementTextContent = (text: string) => {
+    const lines = text.split('\n');
+    const list: typeof statementParsedList = [];
+    
+    // Regular expressions for standard date formats:
+    // e.g. 01/06/2026, 01-06-2026, 2026-06-01, 01 Jun 2026, 1 Jun
+    const dateRegex = /(?:(\d{4})[/\-](\d{2})[/\-](\d{2})|(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})|(\d{1,2})\s+([a-zA-Z]{3,4})\s*(\d{2,4})?)/i;
+
+    const monthsMap: { [key: string]: string } = {
+      jan: '01', ene: '01', feb: '02', mar: '03', apr: '04', abr: '04',
+      may: '05', jun: '06', jul: '07', aug: '08', ago: '08', sep: '09',
+      oct: '10', nov: '11', dec: '12', dic: '12'
+    };
+
+    lines.forEach((line, idx) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+
+      // Let's try to find a date
+      const dateMatch = trimmed.match(dateRegex);
+      if (!dateMatch) return;
+
+      // Let's clean the line by removing the date to find description and amount
+      let remaining = trimmed.replace(dateMatch[0], ' ');
+
+      // Let's look for amounts in this line
+      const matches = [...remaining.matchAll(/([+\-]?\s*\$?\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2}))/g)];
+      
+      if (matches.length === 0) return;
+
+      // Take the last amount match
+      const lastMatch = matches[matches.length - 1];
+      const amountStr = lastMatch[0];
+      
+      // Let's clean and parse amount
+      let cleanAmtStr = amountStr.replace(/\s/g, '').replace(/\$/g, '').replace(/,/g, '');
+      let amountVal = parseFloat(cleanAmtStr);
+
+      if (isNaN(amountVal)) return;
+
+      // Let's find description/concept (everything else)
+      let concept = remaining.replace(amountStr, ' ').replace(/\s+/g, ' ').trim();
+      if (!concept) concept = "Transacción Bancaria";
+
+      // Let's reconstruct date
+      let dateStr = new Date().toISOString().split('T')[0];
+      if (dateMatch[1] && dateMatch[2] && dateMatch[3]) {
+        // YYYY-MM-DD
+        dateStr = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+      } else if (dateMatch[4] && dateMatch[5]) {
+        // DD/MM/YYYY
+        let day = dateMatch[4].padStart(2, '0');
+        let month = dateMatch[5].padStart(2, '0');
+        let year = dateMatch[6] || new Date().getFullYear().toString();
+        if (year.length === 2) year = "20" + year;
+        dateStr = `${year}-${month}-${day}`;
+      } else if (dateMatch[7] && dateMatch[8]) {
+        // DD MMM (e.g. 02 Jun)
+        let day = dateMatch[7].padStart(2, '0');
+        let mon = dateMatch[8].toLowerCase().substring(0, 3);
+        let month = monthsMap[mon] || '01';
+        let year = dateMatch[9] || new Date().getFullYear().toString();
+        if (year.length === 2) year = "20" + year;
+        dateStr = `${year}-${month}-${day}`;
+      }
+
+      list.push({
+        id: `statement_parsed_${idx}_${Date.now()}`,
+        concept,
+        category: amountVal > 0 ? 'Ingreso' : 'Gasto Variable', // default category
+        amount: amountVal,
+        date: dateStr,
+        selected: true
+      });
+    });
+
+    setStatementParsedList(list);
+  };
+
+  const handlePDFUpload = (file: File) => {
+    // @ts-ignore
+    const pdfjsLib = window['pdfjs-dist/build/pdf'];
+    if (!pdfjsLib) {
+      alert("La biblioteca PDF.js se está cargando, por favor intenta de nuevo en unos segundos.");
+      return;
+    }
+
+    setIsParsingStatement(true);
+    const reader = new FileReader();
+    reader.onload = async function () {
+      try {
+        const typedarray = new Uint8Array(this.result as ArrayBuffer);
+        const pdf = await pdfjsLib.getDocument(typedarray).promise;
+        let textAccumulator = "";
+        
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items.map((item: any) => item.str).join(" \n");
+          textAccumulator += pageText + "\n";
+        }
+        
+        setStatementText(textAccumulator);
+        parseStatementTextContent(textAccumulator);
+      } catch (err) {
+        alert("Ocurrió un error leyendo el archivo PDF.");
+        console.error(err);
+      } finally {
+        setIsParsingStatement(false);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleConfirmStatementImport = () => {
+    const selectedItems = statementParsedList.filter(item => item.selected);
+    if (selectedItems.length === 0) {
+      alert("No has seleccionado ninguna transacción para importar.");
+      return;
+    }
+
+    const newMovements: Movement[] = selectedItems.map(item => ({
+      id: item.id,
+      concept: item.concept,
+      category: item.category,
+      amount: item.amount,
+      date: item.date
+    }));
+
+    setMovements(prev => [...newMovements, ...prev]);
+    setShowStatementModal(false);
+    setStatementText('');
+    setStatementParsedList([]);
+    alert(`¡Se importaron ${selectedItems.length} movimientos de manera exitosa!`);
+  };
+
+
 
   const handleAddMovement = (e: React.FormEvent) => {
     e.preventDefault();
@@ -599,6 +777,36 @@ export default function DashboardFinanzas() {
     setNewAmount('');
     setShowAddForm(false);
   };
+
+  useEffect(() => {
+    if (editingMovement) {
+      setEditConcept(editingMovement.concept);
+      setEditCategory(editingMovement.category);
+      setEditAmount(Math.abs(editingMovement.amount).toString());
+      setEditDate(editingMovement.date);
+    }
+  }, [editingMovement]);
+
+  const handleEditMovementSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMovement || !editConcept || !editAmount) return;
+    const amt = parseFloat(editAmount);
+    const finalAmt = editCategory === 'Ingreso' ? Math.abs(amt) : -Math.abs(amt);
+    setMovements(prev => prev.map(m => {
+      if (m.id === editingMovement.id) {
+        return {
+          ...m,
+          concept: editConcept,
+          category: editCategory,
+          amount: finalAmt,
+          date: editDate || new Date().toISOString().split('T')[0]
+        };
+      }
+      return m;
+    }));
+    setEditingMovement(null);
+  };
+
 
   // --- Onboarding Completion Handler ---
   const handleOnboardingSubmit = (e: React.FormEvent) => {
@@ -1320,6 +1528,21 @@ export default function DashboardFinanzas() {
               />
             </label>
 
+            {/* Bank Statement Importer Button */}
+            <button
+              onClick={() => {
+                setStatementText('');
+                setStatementParsedList([]);
+                setShowStatementModal(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-cyan-500 text-slate-950 font-black text-xs uppercase tracking-wider hover:bg-cyan-400 active:scale-95 transition-all shadow-md"
+              title="Cargar PDF de estado de cuenta para extraer y clasificar transacciones"
+            >
+              <Calculator size={14} strokeWidth={2.5} />
+              Importar Estado de Cuenta
+            </button>
+
+
             {/* Sync default from folder */}
             <button
               onClick={handleResetExcel}
@@ -1661,6 +1884,7 @@ export default function DashboardFinanzas() {
                 color="emerald"
                 total={stats.income}
                 onDelete={(id: string) => setMovements(p => p.filter(m => m.id !== id))}
+                onEdit={(item: any) => setEditingMovement(item)}
                 format={format}
                 isPrivacy={isPrivacy}
                 theme={T}
@@ -1674,11 +1898,13 @@ export default function DashboardFinanzas() {
                 color="rose"
                 total={stats.totalExpenses}
                 onDelete={(id: string) => setMovements(p => p.filter(m => m.id !== id))}
+                onEdit={(item: any) => setEditingMovement(item)}
                 format={format}
                 isPrivacy={isPrivacy}
                 theme={T}
                 onAddClick={() => { setNewCategory('Gasto Fijo'); setShowAddForm(true); }}
               />
+
             </div>
 
             {/* Investments Section (NEW FEATURE) */}
@@ -2269,6 +2495,234 @@ export default function DashboardFinanzas() {
         </Modal>
       )}
 
+      {/* Edit Transaction Modal */}
+      {editingMovement && (
+        <Modal title="Editar Movimiento" onClose={() => setEditingMovement(null)} theme={T}>
+          <form onSubmit={handleEditMovementSubmit} className="space-y-4">
+            <input
+              type="text"
+              placeholder="Concepto (ej. Comida, Freelance, Sueldo)"
+              value={editConcept}
+              onChange={e => setEditConcept(e.target.value)}
+              className={`w-full p-4 rounded-2xl text-sm font-bold ${T.inputBg}`}
+              required
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <select
+                value={editCategory}
+                onChange={e => setEditCategory(e.target.value as any)}
+                className={`p-4 rounded-2xl text-sm font-bold ${T.inputBg}`}
+              >
+                <option value="Ingreso">Ingreso</option>
+                <option value="Gasto Fijo">Gasto Fijo</option>
+                <option value="Gasto Variable">Gasto Variable</option>
+              </select>
+              <input
+                type="number"
+                placeholder="Monto"
+                value={editAmount}
+                onChange={e => setEditAmount(e.target.value)}
+                className={`p-4 rounded-2xl text-sm font-bold ${T.inputBg}`}
+                required
+              />
+            </div>
+            <input
+              type="date"
+              value={editDate}
+              onChange={e => setEditDate(e.target.value)}
+              className={`w-full p-4 rounded-2xl text-sm font-bold ${T.inputBg}`}
+            />
+            <button type="submit" className="w-full py-4 rounded-2xl bg-cyan-500 text-slate-950 font-black text-sm uppercase tracking-wider active:scale-95 transition-all">
+              Guardar Cambios
+            </button>
+          </form>
+        </Modal>
+      )}
+
+      {/* Bank Statement Importer Modal */}
+      {showStatementModal && (
+        <Modal title="Importar Estado de Cuenta" onClose={() => setShowStatementModal(false)} theme={T} size="lg">
+          <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2 scrollbar-hide">
+            
+            {statementParsedList.length === 0 ? (
+              <div className="space-y-6">
+                <div className="p-4 rounded-2xl bg-cyan-500/5 border border-cyan-500/20 text-xs text-cyan-300 leading-normal">
+                  <span className="font-black uppercase tracking-wider block mb-1">💡 ¿Cómo funciona?</span>
+                  Carga tu estado de cuenta en formato **PDF** (ej. de tu banco) o copia y pega el texto bruto de las transacciones. Nuestra IA local analizará las fechas y montos para que puedas revisarlos y clasificarlos antes de importarlos.
+                </div>
+
+                {/* PDF Drag & Drop / File Select */}
+                <div className="space-y-2">
+                  <label className="text-[10px] uppercase font-black tracking-widest text-slate-400 block">Opción A: Subir PDF de tu Banco</label>
+                  <div className="border-2 border-dashed border-slate-700/50 hover:border-cyan-500/50 rounded-2xl p-8 text-center bg-slate-950/20 transition-all relative">
+                    {isParsingStatement ? (
+                      <div className="space-y-2 py-4">
+                        <RefreshCw size={24} className="animate-spin mx-auto text-cyan-400" />
+                        <p className="text-xs font-bold text-slate-300">Extrayendo texto y transacciones del PDF bancario...</p>
+                      </div>
+                    ) : (
+                      <label className="cursor-pointer block space-y-2">
+                        <Calculator className="mx-auto text-slate-400" size={32} />
+                        <span className="text-xs font-black text-slate-200 block">Selecciona o arrastra el archivo PDF</span>
+                        <span className="text-[10px] text-slate-500 block">El análisis se realiza localmente en tu PC</span>
+                        <input
+                          type="file"
+                          accept=".pdf"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) handlePDFUpload(f);
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center my-4">
+                  <div className="flex-1 h-0.5 bg-slate-800/40"></div>
+                  <span className="text-[9px] font-black uppercase text-slate-500 px-3">O</span>
+                  <div className="flex-1 h-0.5 bg-slate-800/40"></div>
+                </div>
+
+                {/* Paste raw text block */}
+                <div className="space-y-2">
+                  <label className="text-[10px] uppercase font-black tracking-widest text-slate-400 block">Opción B: Pegar texto del estado de cuenta</label>
+                  <textarea
+                    placeholder="Pega aquí el texto de las transacciones (ej: &#10;02/06/2026 SPEI TRANSFERENCIA RECIBIDA +2500.00 &#10;02-06-2026 COMPRA EN SUPERMERCADO -320.50)"
+                    value={statementText}
+                    onChange={e => setStatementText(e.target.value)}
+                    className={`w-full h-32 p-4 rounded-2xl text-xs font-bold ${T.inputBg} font-mono`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => parseStatementTextContent(statementText)}
+                    disabled={!statementText.trim()}
+                    className="w-full py-4 rounded-2xl bg-cyan-500 text-slate-950 font-black text-sm uppercase tracking-wider active:scale-95 disabled:opacity-40 transition-all cursor-pointer"
+                  >
+                    Analizar Texto Pegado
+                  </button>
+                </div>
+              </div>
+            ) : (
+              // Preview List Table
+              <div className="space-y-4">
+                <div className="flex justify-between items-center border-b border-slate-800/10 pb-3">
+                  <h4 className="text-xs font-black text-cyan-400 uppercase tracking-wider">Transacciones Encontradas</h4>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatementText('');
+                      setStatementParsedList([]);
+                    }}
+                    className="text-[9px] font-black uppercase tracking-wider text-slate-400 hover:text-rose-500 cursor-pointer"
+                  >
+                    ← Volver a Cargar
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-700/20 text-slate-500 font-extrabold uppercase text-[9px] tracking-wider">
+                        <th className="pb-2 pr-3 w-8">Selec.</th>
+                        <th className="pb-2 pr-3">Fecha</th>
+                        <th className="pb-2 pr-3">Concepto/Descripción</th>
+                        <th className="pb-2 pr-3">Categoría</th>
+                        <th className="pb-2 text-right">Importe</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-850/5">
+                      {statementParsedList.map((item, idx) => {
+                        const isIncome = item.amount > 0;
+                        return (
+                          <tr key={item.id} className={`hover:bg-slate-850/5 transition-colors ${!item.selected ? 'opacity-40' : ''}`}>
+                            <td className="py-3 pr-3">
+                              <input
+                                type="checkbox"
+                                checked={item.selected}
+                                onChange={() => {
+                                  const newList = [...statementParsedList];
+                                  newList[idx].selected = !newList[idx].selected;
+                                  setStatementParsedList(newList);
+                                }}
+                                className="w-4 h-4 rounded cursor-pointer accent-cyan-500"
+                              />
+                            </td>
+                            <td className="py-3 pr-3">
+                              <input
+                                type="text"
+                                value={item.date}
+                                onChange={(e) => {
+                                  const newList = [...statementParsedList];
+                                  newList[idx].date = e.target.value;
+                                  setStatementParsedList(newList);
+                                }}
+                                className={`p-1.5 rounded-lg text-[11px] font-bold w-24 ${T.inputBg}`}
+                              />
+                            </td>
+                            <td className="py-3 pr-3">
+                              <input
+                                type="text"
+                                value={item.concept}
+                                onChange={(e) => {
+                                  const newList = [...statementParsedList];
+                                  newList[idx].concept = e.target.value;
+                                  setStatementParsedList(newList);
+                                }}
+                                className={`p-1.5 rounded-lg text-[11px] font-bold w-full ${T.inputBg}`}
+                              />
+                            </td>
+                            <td className="py-3 pr-3">
+                              <select
+                                value={item.category}
+                                onChange={(e) => {
+                                  const newList = [...statementParsedList];
+                                  newList[idx].category = e.target.value as any;
+                                  setStatementParsedList(newList);
+                                }}
+                                className={`p-1.5 rounded-lg text-[10px] font-bold ${T.inputBg}`}
+                              >
+                                <option value="Ingreso">Ingreso</option>
+                                <option value="Gasto Fijo">Gasto Fijo</option>
+                                <option value="Gasto Variable">Gasto Variable</option>
+                              </select>
+                            </td>
+                            <td className={`py-3 text-right font-black ${isIncome ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {isIncome ? `+$${item.amount.toLocaleString()}` : `-$${Math.abs(item.amount).toLocaleString()}`}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex gap-3 pt-4 border-t border-slate-700/15">
+                  <button
+                    type="button"
+                    onClick={() => setShowStatementModal(false)}
+                    className="flex-1 py-4 rounded-2xl bg-slate-850 hover:bg-slate-800 text-slate-300 font-extrabold text-sm uppercase tracking-wider transition-all cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmStatementImport}
+                    className="flex-1 py-4 rounded-2xl bg-cyan-500 text-slate-950 font-black text-sm uppercase tracking-wider active:scale-95 transition-all cursor-pointer"
+                  >
+                    Confirmar Importación ({statementParsedList.filter(x => x.selected).length})
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </Modal>
+      )}
+
+
+
       {/* Sinking Fund Add Modal */}
       {showSinkForm && (
         <Modal title="Nueva Bolsa de Ahorro" onClose={() => setShowSinkForm(false)} theme={T}>
@@ -2637,7 +3091,7 @@ const KPIBadge = ({ title, value, color, isString, format, theme }: any) => {
   );
 };
 
-const BudgetColumn = ({ title, data, color, total, onDelete, format, isPrivacy, theme, onAddClick }: any) => {
+const BudgetColumn = ({ title, data, color, total, onDelete, onEdit, format, isPrivacy, theme, onAddClick }: any) => {
   const isInc = color === 'emerald';
   const titleColor = isInc ? 'text-emerald-400' : 'text-rose-400';
   const totalColor = isInc ? 'text-emerald-500' : 'text-rose-500';
@@ -2660,7 +3114,10 @@ const BudgetColumn = ({ title, data, color, total, onDelete, format, isPrivacy, 
               <span className={`text-xs font-black ${titleColor}`}>
                 {isPrivacy ? '••••' : (isInc ? `+$${item.amount.toLocaleString()}` : `-$${Math.abs(item.amount).toLocaleString()}`)}
               </span>
-              <button onClick={() => onDelete(item.id)} className="text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={12} /></button>
+              <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => onEdit(item)} className="text-slate-500 hover:text-cyan-400" title="Editar"><Pencil size={12} /></button>
+                <button onClick={() => onDelete(item.id)} className="text-slate-600 hover:text-rose-500" title="Eliminar"><Trash2 size={12} /></button>
+              </div>
             </div>
           </div>
         ))}
@@ -2678,6 +3135,7 @@ const BudgetColumn = ({ title, data, color, total, onDelete, format, isPrivacy, 
     </div>
   );
 };
+
 
 const RatioGauge = ({ title, ratio, ideal, desc, colorClass, theme, formatValue }: any) => {
   return (
@@ -2736,16 +3194,20 @@ const MultiplierCard = ({ year, rate, contribution, format, theme }: any) => {
   );
 };
 
-const Modal = ({ title, children, onClose, theme }: any) => (
-  <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-end md:items-center justify-center p-0 md:p-6 animate-in fade-in slide-in-from-bottom duration-300">
-    <div className={`${theme.card} rounded-t-[32px] md:rounded-[36px] p-6 md:p-8 max-w-md w-full shadow-2xl relative overflow-hidden`}>
-      <div className="flex justify-between items-center mb-6">
-        <h3 className={`text-xl font-black ${theme.text} tracking-tighter uppercase italic`}>{title}</h3>
-        <button type="button" onClick={onClose} className="p-1 rounded-full bg-slate-800 text-slate-400 hover:text-rose-500 transition-all active:scale-75">
-          <Plus size={18} className="rotate-45" />
-        </button>
+const Modal = ({ title, children, onClose, theme, size = 'md' }: any) => {
+  const sizeClass = size === 'lg' ? 'max-w-4xl w-full' : 'max-w-md w-full';
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-end md:items-center justify-center p-0 md:p-6 animate-in fade-in slide-in-from-bottom duration-300">
+      <div className={`${theme.card} rounded-t-[32px] md:rounded-[36px] p-6 md:p-8 ${sizeClass} shadow-2xl relative overflow-hidden`}>
+        <div className="flex justify-between items-center mb-6">
+          <h3 className={`text-xl font-black ${theme.text} tracking-tighter uppercase italic`}>{title}</h3>
+          <button type="button" onClick={onClose} className="p-1 rounded-full bg-slate-800 text-slate-400 hover:text-rose-500 transition-all active:scale-75">
+            <Plus size={18} className="rotate-45" />
+          </button>
+        </div>
+        {children}
       </div>
-      {children}
     </div>
-  </div>
-);
+  );
+};
+
