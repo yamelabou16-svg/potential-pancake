@@ -1,0 +1,156 @@
+{
+  "movements": [
+    {
+      "id": "init_1",
+      "concept": "Sueldo Principal",
+      "category": "Ingreso",
+      "amount": 2600,
+      "date": "2026-06-01"
+    },
+    {
+      "id": "init_2",
+      "concept": "Alquiler / Hipoteca",
+      "category": "Gasto Fijo",
+      "amount": -800,
+      "date": "2026-06-01"
+    },
+    {
+      "id": "init_3",
+      "concept": "Comida / Despensa",
+      "category": "Gasto Fijo",
+      "amount": -300,
+      "date": "2026-06-02"
+    },
+    {
+      "id": "init_4",
+      "concept": "Servicios (Luz, agua, gas)",
+      "category": "Gasto Fijo",
+      "amount": -150,
+      "date": "2026-06-02"
+    },
+    {
+      "id": "init_5",
+      "concept": "Transporte / Gasolina",
+      "category": "Gasto Fijo",
+      "amount": -150,
+      "date": "2026-06-02"
+    },
+    {
+      "id": "init_6",
+      "concept": "Teléfono / Internet",
+      "category": "Gasto Fijo",
+      "amount": -100,
+      "date": "2026-06-03"
+    },
+    {
+      "id": "init_7",
+      "concept": "Ropa / Restaurantes (Salidas)",
+      "category": "Gasto Variable",
+      "amount": -75,
+      "date": "2026-06-03"
+    },
+    {
+      "id": "init_8",
+      "concept": "Ocio / Imprevistos",
+      "category": "Gasto Variable",
+      "amount": -75,
+      "date": "2026-06-04"
+    }
+  ],
+  "goal": {
+    "name": "Meta de Libertad Financiera",
+    "amount": 15000,
+    "monthlyContribution": 650
+  },
+  "payments": [
+    {
+      "id": "pay_1",
+      "name": "Alquiler Mensual",
+      "amount": 800,
+      "dueDate": "2026-06-10"
+    },
+    {
+      "id": "pay_2",
+      "name": "Factura de Luz & Agua",
+      "amount": 150,
+      "dueDate": "2026-06-15"
+    },
+    {
+      "id": "pay_3",
+      "name": "Plan de Teléfono",
+      "amount": 100,
+      "dueDate": "2026-06-20"
+    }
+  ],
+  "antExpenses": [
+    {
+      "id": "ant_1",
+      "name": "Café diario fuera de casa",
+      "monthlyAmount": 50
+    },
+    {
+      "id": "ant_2",
+      "name": "Suscripciones no usadas",
+      "monthlyAmount": 30
+    },
+    {
+      "id": "ant_3",
+      "name": "Comida a domicilio (delivery)",
+      "monthlyAmount": 70
+    }
+  ],
+  "sinkingFunds": [
+    {
+      "id": "sink_1",
+      "name": "Fondo de Emergencias",
+      "target": 3000,
+      "current": 1200
+    },
+    {
+      "id": "sink_2",
+      "name": "Fondo de Vacaciones",
+      "target": 2000,
+      "current": 500
+    },
+    {
+      "id": "sink_3",
+      "name": "Fondo de Inversiones",
+      "target": 5000,
+      "current": 1500
+    }
+  ],
+  "debts": [
+    {
+      "id": "debt_1",
+      "name": "Tarjeta de Crédito",
+      "balance": 1200,
+      "rate": 18.5,
+      "minPayment": 60
+    },
+    {
+      "id": "debt_2",
+      "name": "Préstamo Personal",
+      "balance": 4500,
+      "rate": 9.5,
+      "minPayment": 150
+    }
+  ],
+  "investments": [
+    {
+      "id": "inv_1",
+      "name": "CETES Directo (Renta Fija)",
+      "type": "Renta Fija",
+      "balance": 1500,
+      "monthlyContribution": 200,
+      "yieldRate": 11.0
+    },
+    {
+      "id": "inv_2",
+      "name": "ETF S&P 500 (Acciones)",
+      "type": "Renta Variable",
+      "balance": 1200,
+      "monthlyContribution": 150,
+      "yieldRate": 10.0
+    }
+  ]
+}
