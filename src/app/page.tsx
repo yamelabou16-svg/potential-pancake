@@ -622,17 +622,20 @@ export default function DashboardFinanzas() {
     reader.readAsText(file);
   };
 
-  const parseStatementTextContent = (text: string) => {
+  const parseStatementTextContent = (text: string): Movement[] => {
     const lines = text.split('\n');
-    const list: typeof statementParsedList = [];
+    const list: Movement[] = [];
     
-    // Regular expressions for standard date formats:
-    // e.g. 01/06/2026, 01-06-2026, 2026-06-01, 01 Jun 2026, 1 Jun
-    const dateRegex = /(?:(\d{4})[/\-](\d{2})[/\-](\d{2})|(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})|(\d{1,2})\s+([a-zA-Z]{3,4})\s*(\d{2,4})?)/i;
+    // Improved dateRegex:
+    // 1. YYYY-MM-DD
+    // 2. DD/MMM/YYYY or DD-MMM-YYYY or DD-MMM-YY (e.g. 02/JUN/2026, 15-DIC-25, 02-Jun-26)
+    // 3. DD/MM/YYYY or DD-MM-YYYY or DD-MM-YY (e.g. 02/06/2026, 02-06-26)
+    // 4. DD MMM YYYY or DD MMM (e.g. 02 Jun 2026, 2 Jun)
+    const dateRegex = /(?:(\d{4})[/\-](\d{2})[/\-](\d{2})|(\d{1,2})[/\-]([a-zA-Z]{3,10})[/\-](\d{2,4})|(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})|(\d{1,2})\s+([a-zA-Z]{3,10})\s*(\d{2,4})?)/i;
 
     const monthsMap: { [key: string]: string } = {
       jan: '01', ene: '01', feb: '02', mar: '03', apr: '04', abr: '04',
-      may: '05', jun: '06', jul: '07', aug: '08', ago: '08', sep: '09',
+      may: '05', jun: '06', jul: '07', aug: '08', ago: '08', sep: '09', set: '09',
       oct: '10', nov: '11', dec: '12', dic: '12'
     };
 
@@ -640,65 +643,147 @@ export default function DashboardFinanzas() {
       const trimmed = line.trim();
       if (!trimmed) return;
 
-      // Let's try to find a date
+      // Try to find a date
       const dateMatch = trimmed.match(dateRegex);
       if (!dateMatch) return;
 
-      // Let's clean the line by removing the date to find description and amount
+      // Clean the line by removing the date to find description and amount
       let remaining = trimmed.replace(dateMatch[0], ' ');
 
-      // Let's look for amounts in this line
-      const matches = [...remaining.matchAll(/([+\-]?\s*\$?\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2}))/g)];
-      
+      // Find all financial-looking numbers in the remaining text
+      // Matches things like: -150.00, +2,500.50, 1500, -350, 120.00-, 120-, etc.
+      // Sign prefix or suffix (CR/DB/-/+), currency symbol optional, digits with dots/commas
+      const numRegex = /([+\-]?\s*\$?\s*\d+(?:[.,]\d{3})*(?:[.,]\d{1,2})?\s*[-+CRDcrdb]{0,2})/g;
+      const matches = [...remaining.matchAll(numRegex)];
       if (matches.length === 0) return;
 
-      // Take the last amount match
-      const lastMatch = matches[matches.length - 1];
-      const amountStr = lastMatch[0];
-      
-      // Let's clean and parse amount
-      let cleanAmtStr = amountStr.replace(/\s/g, '').replace(/\$/g, '').replace(/,/g, '');
-      let amountVal = parseFloat(cleanAmtStr);
+      // Clean and parse numbers
+      const candidates = matches.map(m => {
+        const rawStr = m[0];
+        const isNeg = rawStr.includes('-') || rawStr.toUpperCase().includes('DB') || rawStr.toUpperCase().includes('DEB');
+        const isPos = rawStr.includes('+') || rawStr.toUpperCase().includes('CR');
+        
+        let clean = rawStr.replace(/\s/g, '')
+                          .replace(/\$/g, '')
+                          .replace(/cr/i, '')
+                          .replace(/db/i, '')
+                          .replace(/[+\-]/g, '');
+        
+        // Handle thousands separator vs decimal separator
+        if (clean.includes(',') && clean.includes('.')) {
+          if (clean.indexOf(',') < clean.indexOf('.')) {
+            clean = clean.replace(/,/g, '');
+          } else {
+            clean = clean.replace(/\./g, '').replace(/,/g, '.');
+          }
+        } else if (clean.includes(',')) {
+          const parts = clean.split(',');
+          if (parts[1] && parts[1].length === 2) {
+            clean = clean.replace(/,/g, '.');
+          } else {
+            clean = clean.replace(/,/g, '');
+          }
+        } else if (clean.includes('.')) {
+          const parts = clean.split('.');
+          if (parts[1] && parts[1].length === 3) {
+            clean = clean.replace(/\./g, '');
+          }
+        }
+        
+        let val = parseFloat(clean);
+        if (isNaN(val)) return null;
+        if (isNeg) val = -Math.abs(val);
+        else if (isPos) val = Math.abs(val);
+        
+        return {
+          originalString: rawStr,
+          value: val,
+          hasSign: isNeg || isPos
+        };
+      }).filter(c => c !== null) as { originalString: string; value: number; hasSign: boolean }[];
 
-      if (isNaN(amountVal)) return;
+      if (candidates.length === 0) return;
 
-      // Let's find description/concept (everything else)
+      // Select the amount using heuristics
+      let selectedCandidate = candidates[0];
+      if (candidates.length > 1) {
+        const signed = candidates.find(c => c.hasSign);
+        if (signed) {
+          selectedCandidate = signed;
+        } else {
+          if (candidates.length === 2) {
+            selectedCandidate = candidates[0];
+          } else {
+            selectedCandidate = candidates[candidates.length - 2];
+          }
+        }
+      }
+
+      const amountVal = selectedCandidate.value;
+      const amountStr = selectedCandidate.originalString;
+
+      // Let's determine the concept (everything in remaining minus the amount string)
       let concept = remaining.replace(amountStr, ' ').replace(/\s+/g, ' ').trim();
       if (!concept) concept = "Transacción Bancaria";
 
-      // Let's reconstruct date
+      // If description is empty or just whitespace/punctuation, ignore the line
+      if (concept.replace(/[^a-zA-Z0-9]/g, '').trim().length < 3) return;
+
+      // If description contains words indicating expense, make it negative if unsigned
+      let finalAmount = amountVal;
+      if (!selectedCandidate.hasSign) {
+        const lowerConcept = concept.toLowerCase();
+        const expenseKeywords = ['compra', 'pago', 'retiro', 'cargo', 'comision', 'comisión', 'oxxo', 'uber', 'didi', 'super', 'gasto', 'farmacia', 'restaurante', 'interes deudor', 'seguro', 'renta', 'alquiler', 'servicio'];
+        const isExpense = expenseKeywords.some(kw => lowerConcept.includes(kw));
+        if (isExpense) {
+          finalAmount = -Math.abs(amountVal);
+        } else {
+          const incomeKeywords = ['sueldo', 'nomina', 'nómina', 'deposito', 'depósito', 'abono', 'transferencia recibida', 'spei recibido', 'interes acreedor', 'rendimiento', 'devolucion', 'devolución'];
+          const isIncome = incomeKeywords.some(kw => lowerConcept.includes(kw));
+          if (!isIncome) {
+            finalAmount = -Math.abs(amountVal);
+          } else {
+            finalAmount = Math.abs(amountVal);
+          }
+        }
+      }
+
+      // Reconstruct date
       let dateStr = new Date().toISOString().split('T')[0];
       if (dateMatch[1] && dateMatch[2] && dateMatch[3]) {
-        // YYYY-MM-DD
         dateStr = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
-      } else if (dateMatch[4] && dateMatch[5]) {
-        // DD/MM/YYYY
+      } else if (dateMatch[4] && dateMatch[5] && dateMatch[6]) {
         let day = dateMatch[4].padStart(2, '0');
-        let month = dateMatch[5].padStart(2, '0');
-        let year = dateMatch[6] || new Date().getFullYear().toString();
+        let mon = dateMatch[5].toLowerCase().substring(0, 3);
+        let month = monthsMap[mon] || '01';
+        let year = dateMatch[6];
         if (year.length === 2) year = "20" + year;
         dateStr = `${year}-${month}-${day}`;
-      } else if (dateMatch[7] && dateMatch[8]) {
-        // DD MMM (e.g. 02 Jun)
+      } else if (dateMatch[7] && dateMatch[8] && dateMatch[9]) {
         let day = dateMatch[7].padStart(2, '0');
-        let mon = dateMatch[8].toLowerCase().substring(0, 3);
+        let month = dateMatch[8].padStart(2, '0');
+        let year = dateMatch[9];
+        if (year.length === 2) year = "20" + year;
+        dateStr = `${year}-${month}-${day}`;
+      } else if (dateMatch[10] && dateMatch[11]) {
+        let day = dateMatch[10].padStart(2, '0');
+        let mon = dateMatch[11].toLowerCase().substring(0, 3);
         let month = monthsMap[mon] || '01';
-        let year = dateMatch[9] || new Date().getFullYear().toString();
+        let year = dateMatch[12] || new Date().getFullYear().toString();
         if (year.length === 2) year = "20" + year;
         dateStr = `${year}-${month}-${day}`;
       }
 
       list.push({
-        id: `statement_parsed_${idx}_${Date.now()}`,
+        id: `statement_parsed_${idx}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
         concept,
-        category: amountVal > 0 ? 'Ingreso' : 'Gasto Variable', // default category
-        amount: amountVal,
-        date: dateStr,
-        selected: true
+        category: finalAmount > 0 ? 'Ingreso' : 'Gasto Variable',
+        amount: finalAmount,
+        date: dateStr
       });
     });
 
-    setStatementParsedList(list);
+    return list;
   };
 
   const handlePDFUpload = (file: File) => {
@@ -724,8 +809,14 @@ export default function DashboardFinanzas() {
           textAccumulator += pageText + "\n";
         }
         
-        setStatementText(textAccumulator);
-        parseStatementTextContent(textAccumulator);
+        const importedMovements = parseStatementTextContent(textAccumulator);
+        if (importedMovements.length === 0) {
+          alert("No se identificaron transacciones en el archivo PDF. Intenta copiar y pegar el texto en la Opción B.");
+        } else {
+          setMovements(prev => [...importedMovements, ...prev]);
+          setShowStatementModal(false);
+          alert(`¡Carga exitosa! Se importaron automáticamente ${importedMovements.length} movimientos desde tu estado de cuenta PDF.`);
+        }
       } catch (err) {
         alert("Ocurrió un error leyendo el archivo PDF.");
         console.error(err);
@@ -736,27 +827,6 @@ export default function DashboardFinanzas() {
     reader.readAsArrayBuffer(file);
   };
 
-  const handleConfirmStatementImport = () => {
-    const selectedItems = statementParsedList.filter(item => item.selected);
-    if (selectedItems.length === 0) {
-      alert("No has seleccionado ninguna transacción para importar.");
-      return;
-    }
-
-    const newMovements: Movement[] = selectedItems.map(item => ({
-      id: item.id,
-      concept: item.concept,
-      category: item.category,
-      amount: item.amount,
-      date: item.date
-    }));
-
-    setMovements(prev => [...newMovements, ...prev]);
-    setShowStatementModal(false);
-    setStatementText('');
-    setStatementParsedList([]);
-    alert(`¡Se importaron ${selectedItems.length} movimientos de manera exitosa!`);
-  };
 
 
 
@@ -2541,181 +2611,76 @@ export default function DashboardFinanzas() {
 
       {/* Bank Statement Importer Modal */}
       {showStatementModal && (
-        <Modal title="Importar Estado de Cuenta" onClose={() => setShowStatementModal(false)} theme={T} size="lg">
+        <Modal title="Importar Estado de Cuenta" onClose={() => setShowStatementModal(false)} theme={T} size="md">
           <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2 scrollbar-hide">
             
-            {statementParsedList.length === 0 ? (
-              <div className="space-y-6">
-                <div className="p-4 rounded-2xl bg-cyan-500/5 border border-cyan-500/20 text-xs text-cyan-300 leading-normal">
-                  <span className="font-black uppercase tracking-wider block mb-1">💡 ¿Cómo funciona?</span>
-                  Carga tu estado de cuenta en formato **PDF** (ej. de tu banco) o copia y pega el texto bruto de las transacciones. Nuestra IA local analizará las fechas y montos para que puedas revisarlos y clasificarlos antes de importarlos.
-                </div>
+            <div className="p-4 rounded-2xl bg-cyan-500/5 border border-cyan-500/20 text-xs text-cyan-300 leading-normal">
+              <span className="font-black uppercase tracking-wider block mb-1">💡 ¿Cómo funciona?</span>
+              Carga tu estado de cuenta en formato **PDF** (ej. de tu banco) o copia y pega el texto bruto de las transacciones. El sistema analizará las fechas y montos localmente en tu navegador y los importará de forma directa y automática.
+            </div>
 
-                {/* PDF Drag & Drop / File Select */}
-                <div className="space-y-2">
-                  <label className="text-[10px] uppercase font-black tracking-widest text-slate-400 block">Opción A: Subir PDF de tu Banco</label>
-                  <div className="border-2 border-dashed border-slate-700/50 hover:border-cyan-500/50 rounded-2xl p-8 text-center bg-slate-950/20 transition-all relative">
-                    {isParsingStatement ? (
-                      <div className="space-y-2 py-4">
-                        <RefreshCw size={24} className="animate-spin mx-auto text-cyan-400" />
-                        <p className="text-xs font-bold text-slate-300">Extrayendo texto y transacciones del PDF bancario...</p>
-                      </div>
-                    ) : (
-                      <label className="cursor-pointer block space-y-2">
-                        <Calculator className="mx-auto text-slate-400" size={32} />
-                        <span className="text-xs font-black text-slate-200 block">Selecciona o arrastra el archivo PDF</span>
-                        <span className="text-[10px] text-slate-500 block">El análisis se realiza localmente en tu PC</span>
-                        <input
-                          type="file"
-                          accept=".pdf"
-                          className="hidden"
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) handlePDFUpload(f);
-                          }}
-                        />
-                      </label>
-                    )}
+            {/* PDF Drag & Drop / File Select */}
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase font-black tracking-widest text-slate-400 block">Opción A: Subir PDF de tu Banco</label>
+              <div className="border-2 border-dashed border-slate-700/50 hover:border-cyan-500/50 rounded-2xl p-8 text-center bg-slate-950/20 transition-all relative">
+                {isParsingStatement ? (
+                  <div className="space-y-2 py-4">
+                    <RefreshCw size={24} className="animate-spin mx-auto text-cyan-400" />
+                    <p className="text-xs font-bold text-slate-300">Extrayendo texto y transacciones del PDF bancario...</p>
                   </div>
-                </div>
-
-                <div className="flex items-center my-4">
-                  <div className="flex-1 h-0.5 bg-slate-800/40"></div>
-                  <span className="text-[9px] font-black uppercase text-slate-500 px-3">O</span>
-                  <div className="flex-1 h-0.5 bg-slate-800/40"></div>
-                </div>
-
-                {/* Paste raw text block */}
-                <div className="space-y-2">
-                  <label className="text-[10px] uppercase font-black tracking-widest text-slate-400 block">Opción B: Pegar texto del estado de cuenta</label>
-                  <textarea
-                    placeholder="Pega aquí el texto de las transacciones (ej: &#10;02/06/2026 SPEI TRANSFERENCIA RECIBIDA +2500.00 &#10;02-06-2026 COMPRA EN SUPERMERCADO -320.50)"
-                    value={statementText}
-                    onChange={e => setStatementText(e.target.value)}
-                    className={`w-full h-32 p-4 rounded-2xl text-xs font-bold ${T.inputBg} font-mono`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => parseStatementTextContent(statementText)}
-                    disabled={!statementText.trim()}
-                    className="w-full py-4 rounded-2xl bg-cyan-500 text-slate-950 font-black text-sm uppercase tracking-wider active:scale-95 disabled:opacity-40 transition-all cursor-pointer"
-                  >
-                    Analizar Texto Pegado
-                  </button>
-                </div>
+                ) : (
+                  <label className="cursor-pointer block space-y-2">
+                    <Calculator className="mx-auto text-slate-400" size={32} />
+                    <span className="text-xs font-black text-slate-200 block">Selecciona o arrastra el archivo PDF</span>
+                    <span className="text-[10px] text-slate-500 block">El análisis se realiza localmente en tu PC</span>
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) handlePDFUpload(f);
+                      }}
+                    />
+                  </label>
+                )}
               </div>
-            ) : (
-              // Preview List Table
-              <div className="space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-800/10 pb-3">
-                  <h4 className="text-xs font-black text-cyan-400 uppercase tracking-wider">Transacciones Encontradas</h4>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStatementText('');
-                      setStatementParsedList([]);
-                    }}
-                    className="text-[9px] font-black uppercase tracking-wider text-slate-400 hover:text-rose-500 cursor-pointer"
-                  >
-                    ← Volver a Cargar
-                  </button>
-                </div>
+            </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-700/20 text-slate-500 font-extrabold uppercase text-[9px] tracking-wider">
-                        <th className="pb-2 pr-3 w-8">Selec.</th>
-                        <th className="pb-2 pr-3">Fecha</th>
-                        <th className="pb-2 pr-3">Concepto/Descripción</th>
-                        <th className="pb-2 pr-3">Categoría</th>
-                        <th className="pb-2 text-right">Importe</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-850/5">
-                      {statementParsedList.map((item, idx) => {
-                        const isIncome = item.amount > 0;
-                        return (
-                          <tr key={item.id} className={`hover:bg-slate-850/5 transition-colors ${!item.selected ? 'opacity-40' : ''}`}>
-                            <td className="py-3 pr-3">
-                              <input
-                                type="checkbox"
-                                checked={item.selected}
-                                onChange={() => {
-                                  const newList = [...statementParsedList];
-                                  newList[idx].selected = !newList[idx].selected;
-                                  setStatementParsedList(newList);
-                                }}
-                                className="w-4 h-4 rounded cursor-pointer accent-cyan-500"
-                              />
-                            </td>
-                            <td className="py-3 pr-3">
-                              <input
-                                type="text"
-                                value={item.date}
-                                onChange={(e) => {
-                                  const newList = [...statementParsedList];
-                                  newList[idx].date = e.target.value;
-                                  setStatementParsedList(newList);
-                                }}
-                                className={`p-1.5 rounded-lg text-[11px] font-bold w-24 ${T.inputBg}`}
-                              />
-                            </td>
-                            <td className="py-3 pr-3">
-                              <input
-                                type="text"
-                                value={item.concept}
-                                onChange={(e) => {
-                                  const newList = [...statementParsedList];
-                                  newList[idx].concept = e.target.value;
-                                  setStatementParsedList(newList);
-                                }}
-                                className={`p-1.5 rounded-lg text-[11px] font-bold w-full ${T.inputBg}`}
-                              />
-                            </td>
-                            <td className="py-3 pr-3">
-                              <select
-                                value={item.category}
-                                onChange={(e) => {
-                                  const newList = [...statementParsedList];
-                                  newList[idx].category = e.target.value as any;
-                                  setStatementParsedList(newList);
-                                }}
-                                className={`p-1.5 rounded-lg text-[10px] font-bold ${T.inputBg}`}
-                              >
-                                <option value="Ingreso">Ingreso</option>
-                                <option value="Gasto Fijo">Gasto Fijo</option>
-                                <option value="Gasto Variable">Gasto Variable</option>
-                              </select>
-                            </td>
-                            <td className={`py-3 text-right font-black ${isIncome ? 'text-emerald-400' : 'text-rose-400'}`}>
-                              {isIncome ? `+$${item.amount.toLocaleString()}` : `-$${Math.abs(item.amount).toLocaleString()}`}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+            <div className="flex items-center my-4">
+              <div className="flex-1 h-0.5 bg-slate-800/40"></div>
+              <span className="text-[9px] font-black uppercase text-slate-500 px-3">O</span>
+              <div className="flex-1 h-0.5 bg-slate-800/40"></div>
+            </div>
 
-                <div className="flex gap-3 pt-4 border-t border-slate-700/15">
-                  <button
-                    type="button"
-                    onClick={() => setShowStatementModal(false)}
-                    className="flex-1 py-4 rounded-2xl bg-slate-850 hover:bg-slate-800 text-slate-300 font-extrabold text-sm uppercase tracking-wider transition-all cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleConfirmStatementImport}
-                    className="flex-1 py-4 rounded-2xl bg-cyan-500 text-slate-950 font-black text-sm uppercase tracking-wider active:scale-95 transition-all cursor-pointer"
-                  >
-                    Confirmar Importación ({statementParsedList.filter(x => x.selected).length})
-                  </button>
-                </div>
-              </div>
-            )}
+            {/* Paste raw text block */}
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase font-black tracking-widest text-slate-400 block">Opción B: Pegar texto del estado de cuenta</label>
+              <textarea
+                placeholder="Pega aquí el texto de las transacciones (ej: &#10;02/06/2026 SPEI TRANSFERENCIA RECIBIDA +2500.00 &#10;02-06-2026 COMPRA EN SUPERMERCADO -320.50)"
+                value={statementText}
+                onChange={e => setStatementText(e.target.value)}
+                className={`w-full h-32 p-4 rounded-2xl text-xs font-bold ${T.inputBg} font-mono`}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const importedMovements = parseStatementTextContent(statementText);
+                  if (importedMovements.length === 0) {
+                    alert("No se pudieron extraer transacciones del texto pegado. Asegúrate de incluir la fecha y el monto.");
+                  } else {
+                    setMovements(prev => [...importedMovements, ...prev]);
+                    setShowStatementModal(false);
+                    setStatementText('');
+                    alert(`¡Carga exitosa! Se importaron automáticamente ${importedMovements.length} movimientos desde el texto pegado.`);
+                  }
+                }}
+                disabled={!statementText.trim()}
+                className="w-full py-4 rounded-2xl bg-cyan-500 text-slate-950 font-black text-sm uppercase tracking-wider active:scale-95 disabled:opacity-40 transition-all cursor-pointer"
+              >
+                Analizar e Importar Directamente
+              </button>
+            </div>
 
           </div>
         </Modal>
